@@ -2,7 +2,7 @@ Practical Machine Learning Project
 =======================================  
 
 ### EXECTIVE SUMMARY
-The main purpose of this analysis is to build a model to predict the manner the individual subjects performed the exercise based on the HAR dataset provided by Groupware@LES[http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har), .
+The main purpose of this analysis is to build a model to predict the manner the individual subjects performed the exercise based on the HAR dataset at http://groupware.les.inf.puc-rio.br/har.
 
 Four different models were fitted to the training data: classification tree, random forest, support vector machine, and ensemble of the three. Random forest generated the best accuracy on validation data(0.995, same as stacked model), followed by support vector machine(accuracy rate 0.941) then classification tree(accuracy rate 0.499). Stacking the three model doesn't gain accuracy over random forest, so the final model chosen for this analysis is random forest. The expected out of sample error rate is 0.005. The prediction result on the testing data is listed at the bottom of the report.
 
