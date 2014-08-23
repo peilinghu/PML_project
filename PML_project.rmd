@@ -60,7 +60,7 @@ print(nzv)
 
 The five classes seems to be evenly distributed so there is no concern about bias towards the more common cases for machine learning algorithms.  
 ```{r eval=TRUE, echo=FALSE}
-plot(training$classe, xlab="Class label", ylab="Frequency", main="Histogram of Class", col="blue")
+plot(dftrain$classe, xlab="Class label", ylab="Frequency", main="Histogram of Class", col="blue")
 ```
 
 Due to the system limitation, processing of 11776 rows with 53 features was very time consuming and not efficient. The training data set was split into three subsets to run three different training models separately. The models selected for training were classification trees, random forest, and support vector machine.  
