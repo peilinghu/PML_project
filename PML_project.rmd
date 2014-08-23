@@ -4,7 +4,7 @@ Practical Machine Learning Project
 ### EXECTIVE SUMMARY
 The main purpose of this analysis is to build a model to predict the manner the individual subjects performed the exercise based on the HAR dataset provided by Groupware@LES[http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har), .
 
-Four different models were fitted to the training data: classification tree, random forest, support vector machine, and ensemble of the three. Random forest generated the best accuracy on validation data(0.978, same as stacked model), followed by support vector machine(accuracy rate 0.898) then classification tree(accuracy rate 0.577). Stacking the three model doesn't gain accuracy over random forest, so the final model chosen for this analysis is random forest with BoxCox standardization method and 5-fold cross-validation. The expected out of sample error rate is 0.022. The prediction result on the testing data is listed at the bottom of the report.
+Four different models were fitted to the training data: classification tree, random forest, support vector machine, and ensemble of the three. Random forest generated the best accuracy on validation data(0.995, same as stacked model), followed by support vector machine(accuracy rate 0.941) then classification tree(accuracy rate 0.499). Stacking the three model doesn't gain accuracy over random forest, so the final model chosen for this analysis is random forest. The expected out of sample error rate is 0.005. The prediction result on the testing data is listed at the bottom of the report.
 
 ```{r echo=FALSE, results='hide', warning=FALSE, eval=TRUE, message=FALSE}
 library(lattice)
@@ -56,6 +56,11 @@ df <- df[, 8:length(df)]
 # Check near zero variables
 nzv <- nearZeroVar(df, saveMetrics=TRUE)
 print(nzv)
+
+# Split into training and validation set
+inTrain <- createDataPartition(df$classe, p = 0.6)[[1]] # split based on classe
+training <- df[inTrain,]
+val <- df[-inTrain,]
 ```
 
 The five classes seems to be evenly distributed so there is no concern about bias towards the more common cases for machine learning algorithms.  
@@ -63,76 +68,44 @@ The five classes seems to be evenly distributed so there is no concern about bia
 plot(dftrain$classe, xlab="Class label", ylab="Frequency", main="Histogram of Class", col="blue")
 ```
 
-Due to the system limitation, processing of 11776 rows with 53 features was very time consuming and not efficient. The training data set was split into three subsets to run three different training models separately. The models selected for training were classification trees, random forest, and support vector machine.  
-```{r warning=FALSE, eval=TRUE, echo=FALSE, results='hide'}
-# Split into training and validation set
-inTrain <- createDataPartition(df$classe, p = 0.6)[[1]] # split based on classe
-training <- df[inTrain,]
-val <- df[-inTrain,]
-
-# Split training data into three subsets
-splitdf <- createDataPartition(training$classe, p=0.333)[[1]] # split based on classe
-tr1 <- training[splitdf,]
-other <- training[-splitdf,]
-splitdf <- createDataPartition(other$classe, p=0.50)[[1]] 
-tr2 <- other[splitdf,]
-tr3 <- other[-splitdf,]
-
-# Split testing data into three subsets
-splitdf1 <- createDataPartition(val$classe, p=0.333)[[1]] # split based on classe
-val1 <- val[splitdf1,]
-other <- val[-splitdf1,]
-splitdf1 <- createDataPartition(other$classe, p=0.50)[[1]] 
-val2 <- other[splitdf1,]
-val3 <- other[-splitdf1,]
-```
-
 ### PREDICTIVE MODELING
 ### Classification Tree
-Train a classification tree model with cross-validation, and calculate the accuracy against validation data set. The classification trees model with 5-fold cross-validation produced a 0.577 accuracy rate (out of sample error=0.423).  
+Train a classification tree model with cross-validation, and calculate the accuracy against validation data set. The classification trees model with 5-fold cross-validation produced a 0.499 accuracy rate (out of sample error=0.501).  
 ```{r echo=TRUE, results='markup', warning=FALSE}
-fittree <- train(classe ~., data=tr1, method=c("rpart"), 
-                 trControl=trainControl(method="cv", number=5, repeats=5))
-predtree <- predict(fittree, val1)
+fittree <- train(classe ~., data=training, method=c("rpart"), 
+                 trControl=trainControl(method="cv", allowParallel = TRUE))
+predtree <- predict(fittree, val)
 fancyRpartPlot(fittree$finalModel)
-confusionMatrix(predtree, val1$classe)
+confusionMatrix(predtree, val$classe)
 ```
 
 ### Random Forest
-Train with a random forest model and calculate the accuracy against validation data set. The accuracy rate was 0.978(out of sample error=0.022) after data was preprocessed with BoxCox standardization method and modeled with 5-fold cross-validation.  
+Train with a random forest model and calculate the accuracy against validation data set. The accuracy rate was 0.995(out of sample error=0.005).  
 ```{r echo=TRUE, results='markup', warning=FALSE}
-fitrf <- train(classe ~., data=tr2, prox=TRUE, method="rf", preprocess=c("BoxCox"), 
-               trControl=trainControl(method="cv", number=5, repeats=5))
-predrf <- predict(fitrf, val2)
-confusionMatrix(predrf, val2$classe)
+fitrf <- randomForest(classe ~., data=training)
+predrf <- predict(fitrf, val)
+confusionMatrix(predrf, val$classe)
 ```
 
 ### Support Vector Machine
-Train with support vector machine and calculate the accuracy against validation data set. Support vector machine with 5-fold cross-validation and preprocess with BoxCox method, produced 0.898 accuracy on validation data (out of sample error=0.102).  
+Train with support vector machine and calculate the accuracy against validation data set. Support vector machine produced 0.941 accuracy on validation data (out of sample error=0.059).  
 ```{r echo=TRUE, results='markup', warning=FALSE}
-fitsvm <- svm(classe ~., data = tr3, preprocess=c("BoxCox"), 
-              trControl=trainControl(method="cv", number=5, repeats=5))
-predsvm <- predict(fitsvm, val3)
-confusionMatrix(predsvm, val3$classe)
+fitsvm <- svm(classe ~., data=training)
+predsvm <- predict(fitsvm, val)
+confusionMatrix(predsvm, val$classe)
 ```
 
 ### Model Stacking
-Comparing the three model prediction results, random forest provides the highest prediction accuracy. In the experiment of stacking the three models together, the resulting accuracy was the same as randome forest.  
+Stacking the three models together, the resulting accuracy is the same as randome forest(accuracy 0.995).  
 ```{r warning=FALSE, echo=TRUE, results='markup'}
-fittree <- train(classe ~., data=tr2, method="rpart", 
-                 trControl = trainControl(method="cv", number=5, repeats=5))
-predtree <- predict(fittree, val2)
-fitsvm <- svm(classe ~., data = tr2, preprocess=c("BoxCox"), 
-              trControl = trainControl(method="cv", number=5, repeats=5))
-predsvm <- predict(fitsvm, val2)
-stack <- data.frame(predtree, predrf, predsvm, classe=val2$classe)
-combfit <- train(classe ~ ., method="rf", data=stack)
+stack <- data.frame(predtree, predrf, predsvm, classe=val$classe)
+combfit <- randomForest(classe ~ ., data=stack)
 combpred <- predict(combfit, stack)
-confusionMatrix(combpred, val2$classe)
+confusionMatrix(combpred, val$classe)
 ```
 
 ### PREDICTION
-Predicted classe of the 20 test cases is listed below.  
+Use random forest model to predict the testing data and the result is listed below.  
 ```{r}
 print(predict(fitrf, dftest))
 ```
