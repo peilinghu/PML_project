@@ -1,0 +1,138 @@
+Practical Machine Learning Project
+=======================================  
+
+### EXECTIVE SUMMARY
+The main purpose of this analysis is to build a model to predict the manner the individual subjects performed the exercise based on the HAR dataset provided by Groupware@LES[http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har), .
+
+Four different models were fitted to the training data: classification tree, random forest, support vector machine, and ensemble of the three. Random forest generated the best accuracy on validation data(0.978, same as stacked model), followed by support vector machine(accuracy rate 0.898) then classification tree(accuracy rate 0.577). Stacking the three model doesn't gain accuracy over random forest, so the final model chosen for this analysis is random forest with BoxCox standardization method and 5-fold cross-validation. The expected out of sample error rate is 0.022. The prediction result on the testing data is listed at the bottom of the report.
+
+```{r echo=FALSE, results='hide', warning=FALSE, eval=TRUE, message=FALSE}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(knitr)
+library(AppliedPredictiveModeling)
+library(rattle)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(e1071)
+library(randomForest)
+```
+
+### DATA PROCESSING
+Training and testing data were downloaded from source, and loaded into r as data frames. Training data set contains 19622 rows and testing has 20 records. Training data has 160 variables including identities, timestamps, features, and a label(classe). Testing set doesn't contain label (classe). Out of the 160 features in the training data set, 67 have high percentage(98%) of na values, 8 features are id and timestamps related data which don't contribute to the predicting model, and 17 don't provide meaningful information. As a result, 107 features were removed from the training data set. NearZeroVar analysis didn't identify that any variables should be further removed from the data set.  
+```{r echo=FALSE, results='hide', warning=FALSE, eval=TRUE}
+filepath <- getwd()
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+trainpath <- file.path(getwd(), "pml-training.csv")
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testpath <- file.path(getwd(), "pml-testing.csv")
+```
+```{r eval=FALSE, echo=FALSE}
+## Read data set into data frame
+download.file(trainUrl, trainpath)
+download.file(testUrl, testpath)
+```
+```{r eval=TRUE, echo=FALSE, results='hide'}
+# Read file into data frame
+dftrain <- read.table(trainpath, sep=",", header=TRUE, na.strings=c("NA",""))
+dftest <- read.table(testpath, sep=",", header=TRUE)
+set.seed(531)
+```
+
+```{r results='hide', warning=FALSE, eval=TRUE, echo=FALSE}
+# omit features with high percentage of na data
+notna <- rep(0, length(dftrain))
+for (i in 1:ncol(dftrain)){
+        s <- sum(!is.na(dftrain[,i]))
+        notna[i] <- s # get non NA row count of each feature
+}
+df <- dftrain[,which(notna>=nrow(dftrain)*.5)]
+
+# Remove features which don't provide meaningful information
+df <- df[, 8:length(df)]
+
+# Check near zero variables
+nzv <- nearZeroVar(df, saveMetrics=TRUE)
+print(nzv)
+```
+
+The five classes seems to be evenly distributed so there is no concern about bias towards the more common cases for machine learning algorithms.  
+```{r eval=TRUE, echo=FALSE}
+plot(training$classe, xlab="Class label", ylab="Frequency", main="Histogram of Class", col="blue")
+```
+
+Due to the system limitation, processing of 11776 rows with 53 features was very time consuming and not efficient. The training data set was split into three subsets to run three different training models separately. The models selected for training were classification trees, random forest, and support vector machine.  
+```{r warning=FALSE, eval=TRUE, echo=FALSE, results='hide'}
+# Split into training and validation set
+inTrain <- createDataPartition(df$classe, p = 0.6)[[1]] # split based on classe
+training <- df[inTrain,]
+val <- df[-inTrain,]
+
+# Split training data into three subsets
+splitdf <- createDataPartition(training$classe, p=0.333)[[1]] # split based on classe
+tr1 <- training[splitdf,]
+other <- training[-splitdf,]
+splitdf <- createDataPartition(other$classe, p=0.50)[[1]] 
+tr2 <- other[splitdf,]
+tr3 <- other[-splitdf,]
+
+# Split testing data into three subsets
+splitdf1 <- createDataPartition(val$classe, p=0.333)[[1]] # split based on classe
+val1 <- val[splitdf1,]
+other <- val[-splitdf1,]
+splitdf1 <- createDataPartition(other$classe, p=0.50)[[1]] 
+val2 <- other[splitdf1,]
+val3 <- other[-splitdf1,]
+```
+
+### PREDICTIVE MODELING
+### Classification Tree
+Train a classification tree model with cross-validation, and calculate the accuracy against validation data set. The classification trees model with 5-fold cross-validation produced a 0.577 accuracy rate (out of sample error=0.423).  
+```{r echo=TRUE, results='markup', warning=FALSE}
+fittree <- train(classe ~., data=tr1, method=c("rpart"), 
+                 trControl=trainControl(method="cv", number=5, repeats=5))
+predtree <- predict(fittree, val1)
+fancyRpartPlot(fittree$finalModel)
+confusionMatrix(predtree, val1$classe)
+```
+
+### Random Forest
+Train with a random forest model and calculate the accuracy against validation data set. The accuracy rate was 0.978(out of sample error=0.022) after data was preprocessed with BoxCox standardization method and modeled with 5-fold cross-validation.  
+```{r echo=TRUE, results='markup', warning=FALSE}
+fitrf <- train(classe ~., data=tr2, prox=TRUE, method="rf", preprocess=c("BoxCox"), 
+               trControl=trainControl(method="cv", number=5, repeats=5))
+predrf <- predict(fitrf, val2)
+confusionMatrix(predrf, val2$classe)
+```
+
+### Support Vector Machine
+Train with support vector machine and calculate the accuracy against validation data set. Support vector machine with 5-fold cross-validation and preprocess with BoxCox method, produced 0.898 accuracy on validation data (out of sample error=0.102).  
+```{r echo=TRUE, results='markup', warning=FALSE}
+fitsvm <- svm(classe ~., data = tr3, preprocess=c("BoxCox"), 
+              trControl=trainControl(method="cv", number=5, repeats=5))
+predsvm <- predict(fitsvm, val3)
+confusionMatrix(predsvm, val3$classe)
+```
+
+### Model Stacking
+Comparing the three model prediction results, random forest provides the highest prediction accuracy. In the experiment of stacking the three models together, the resulting accuracy was the same as randome forest.  
+```{r warning=FALSE, echo=TRUE, results='markup'}
+fittree <- train(classe ~., data=tr2, method="rpart", 
+                 trControl = trainControl(method="cv", number=5, repeats=5))
+predtree <- predict(fittree, val2)
+fitsvm <- svm(classe ~., data = tr2, preprocess=c("BoxCox"), 
+              trControl = trainControl(method="cv", number=5, repeats=5))
+predsvm <- predict(fitsvm, val2)
+stack <- data.frame(predtree, predrf, predsvm, classe=val2$classe)
+combfit <- train(classe ~ ., method="rf", data=stack)
+combpred <- predict(combfit, stack)
+confusionMatrix(combpred, val2$classe)
+```
+
+### PREDICTION
+Predicted classe of the 20 test cases is listed below.  
+```{r}
+print(predict(fitrf, dftest))
+```
